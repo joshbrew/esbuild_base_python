@@ -24,7 +24,7 @@ app = Quart(__name__, template_folder='./')
 # handler = Mangum(app)  # optionally set debug=True ### for serverless
 
 # In python command line:
-# python sockerserver.py
+# python server.py
 
 
 ## Socket server functions
