@@ -5,7 +5,7 @@ Make sure you have these pip packages (`pip install x` if not found):
 ```py
 # from mangum import Mangum ## e.g. serverless
 from quart import Quart, render_template, websocket #pip install
-import logging #pip install
+import logging 
 import asyncio 
 import sys
 import threading 
