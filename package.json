@@ -1,0 +1,39 @@
+{
+  "name": "esbuild_custom",
+  "version": "0.0.1",
+  "description": "Barebones esbuild and test node server implementation. For building",
+  "main": "app.js",
+  "scripts": {
+    "start": "node node_server/server.js",
+    "build": "node bundler/bundler.js",
+    "test": "node bundler/bundler.js && node node_server/server.js",
+    "concurrent": "concurrently \"npm run python\" \"npm run startdev\"",
+    "dev": "npm run pip && npm i --save-dev concurrently && npm i --save-dev nodemon && npm run concurrent",
+    "startdev": "nodemon --exec \"npm run build && node node_server/server.js\" -e ejs,js,ts,jsx,tsx,css,html,jpg,png,scss,txt,csv",
+    "python": "py python/server.py",
+    "pip" : "pip install quart && pip install websockets && pip install logging",
+    "pwa": "npm i workbox-cli && workbox generateSW bundler/pwa/workbox-config.js && npm run build && npm start"
+  },
+  "keywords": [
+    "esbuild"
+  ],
+  "author": "Joshua Brewster",
+  "license": "AGPL-3.0-or-later",
+  "dependencies": {
+    "esbuild": "^0.14.21",
+    "fragelement": "^1.0.7"
+  },
+  "devDependencies": {
+    "nodemon": "^2.0.15",
+    "concurrently": "^7.0.0",
+    "ws": "^8.5.0"
+  },
+  "nodemonConfig": {
+    "env": {
+      "NODEMON": true
+    },
+    "ignore": [
+      "dist/"
+    ]
+  }
+}

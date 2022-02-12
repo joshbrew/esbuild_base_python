@@ -1,0 +1,5 @@
+node_modules
+dist/service-worker.js
+dist/service-worker.js.map
+dist/workbox-8f4bcedb.js
+dist/workbox-8f4bcedb.js.map
