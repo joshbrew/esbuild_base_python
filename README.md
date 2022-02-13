@@ -1,8 +1,10 @@
 # Minimal [esbuild](https://esbuild.github.io/getting-started/#your-first-bundle), [Nodejs](https://developer.mozilla.org/en-US/docs/Learn/Server-side/Node_server_without_framework), and [Python Quart](https://pgjones.gitlab.io/quart/) concurrent test env.  
 
-Requires: Python 3, NodeJS LTS or later
+Requires: Python 3.7 or later and NodeJS LTS or later
 
-This test runs a websocket and a thread on the [python](https://www.python.org/downloads/) quart server. You can access the NodeJS test page at `http://localhost:8000` or the quart server test page at `http://localhost:7000` to experiment (add `/build` to access the node build (minus hot reload)). 
+![image](Capture.PNG)
+
+This test runs a websocket and a thread on the [python](https://www.python.org/downloads/) quart server. You can access the Node-served test page at `http://localhost:8000` or the quart server test page at `http://localhost:7000` to experiment (add `/build` at port 7000 to access the node build (minus hot reload)). 
 
 Quart enables fast asyncio server streams from python. Bonus thread-generated data in python streaming through websockets to show off the potential.
 
