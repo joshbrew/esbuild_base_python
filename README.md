@@ -8,9 +8,7 @@ This test runs a websocket and a thread on the [python](https://www.python.org/d
 
 `npm run dev` installs nodejs packages and runs both python and node servers concurrently.
 
-then `npm run startdev` to simply start the concurrent python & node servers
-
-After installing dependencies, run Python and Node together: `npm run concurrently`. 
+After installing dependencies, run Python and Node together: `npm run concurrent`. 
 
 ## Otherwise
 
