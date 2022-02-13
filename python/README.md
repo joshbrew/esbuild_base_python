@@ -22,7 +22,4 @@ Then run:
 
 Then find `http://localhost:7000` to test the websocket
 
-
-> Python is laaaame
-
 For client.py `pip install websockets` also
