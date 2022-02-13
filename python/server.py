@@ -85,16 +85,11 @@ async def queue_from_thread():
         raise
 
 ###################
-## Test tasks to emit random numbers instead of relaying messages
-async def test_transmitter(num):
+## Test task to emit random numbers instead of relaying messages
+async def test_transmitter(queue,num):
     while True:
-        await queue.put(num + random.random())
+        await broadcast(num + random.random())
         await asyncio.sleep(random.random())
-
-async def test_receiver(num):
-    while True:
-        value = await queue.get()
-        print('Consumed', num, value)
 ###################
 
 
