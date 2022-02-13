@@ -9,6 +9,7 @@ port = 7000
 ## app available at http://localhost/7000
  
 import sys
+import os
 import asyncio
 import threading
 import time
@@ -16,10 +17,11 @@ import logging
 from functools import wraps
 
 # from mangum import Mangum
-from quart import Quart, render_template, websocket
+from quart import Quart, render_template, render_template_string, websocket, send_from_directory
 
+base_dir = '../'
 
-app = Quart(__name__, template_folder='./')
+app = Quart(__name__, template_folder=base_dir, static_folder=base_dir)
 
 # handler = Mangum(app)  # optionally set debug=True ### for serverless
 
@@ -114,9 +116,31 @@ async def ws(queue):
 ## test route for receiving messages
 @app.route('/')
 async def index():
-    return await render_template('index.html')
+    return await render_template('python/index.html')
 
+## Can serv the built app from quart too
+@app.route('/build')
+async def build():
+    return await render_template('src/index.html')
 
+def root_dir():  # pragma: no cover
+    return os.path.abspath(os.path.dirname(__file__))
+
+@app.route('/<path:path>')
+async def get_resource(path):  # pragma: no cover
+    p = path.split('/')
+    l = len(p)
+    return await app.send_static_file(path)
+
+## page not found
+@app.errorhandler(404)
+async def pageNotFound(error):
+    return await render_template_string("<h3>404: resource not found</h3>")
+
+## resource not found
+@app.errorhandler(500)
+async def handle_exception(error):
+    return await  render_template_string("<div>500</div>", e=error), 500 ## this isn't quite right
 
 #############
 ## Run sync for whatever reason in quart
