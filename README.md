@@ -2,7 +2,7 @@
 
 Requires: Python 3, NodeJS LTS or later
 
-This test runs a websocket and a thread on the [python](https://www.python.org/downloads/) quart server. You can access the NodeJS test page at `http://localhost:80` or the quart server test page at `http://localhost:7000` to experiment. Quart enables fast asyncio server streams from python. Bonus thread-generated data in python streaming through websockets to show off the potential.
+This test runs a websocket and a thread on the [python](https://www.python.org/downloads/) quart server. You can access the NodeJS test page at `http://localhost:8000` or the quart server test page at `http://localhost:7000` to experiment. Quart enables fast asyncio server streams from python. Bonus thread-generated data in python streaming through websockets to show off the potential.
 
 `npm run pip` should install any missing python packages. See [README](https://github.com/moothyknight/esbuild_base_python/blob/master/python/README.md))
 
