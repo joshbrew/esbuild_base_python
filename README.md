@@ -6,7 +6,7 @@ This test runs a websocket and a thread on the [python](https://www.python.org/d
 
 `npm run pip` should install any missing python packages. See [README](https://github.com/moothyknight/esbuild_base_python/blob/master/python/README.md))
 
-`npm run dev` installs nodejs packages and runs both python and node servers concurrently.
+`npm run dev` installs nodejs packages and runs both python and node servers concurrently (with hot reloading).
 
 After installing dependencies, 
 
