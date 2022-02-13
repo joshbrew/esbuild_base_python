@@ -6,7 +6,7 @@ const settings = {
     startpage: 'src/index.html',  //home page
     errpage: 'src/other/404.html', //error page, etc.
     sslpath:'node_server/ssl/cert.pfx',//if using https, this is required. See cert.pfx.md for instructions
-    socket: 7000  //quart server port
+    quart: 7000  //quart server port
 }
 
 exports.settings = settings;

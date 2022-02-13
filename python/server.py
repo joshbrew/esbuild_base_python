@@ -1,10 +1,16 @@
 # create thread
-# create socket server on thread
-# stream data 
+# create server
+# stream data from threads (or cocurrent processes) to server
+
+
+# In python command line:
+# python server.py
+
 
 ## Settings
 host = 'localhost'
 port = 7000
+base_dir = '../' ## Example serves both templates and static files from the base dir
 
 ## app available at http://localhost/7000
  
@@ -16,60 +22,127 @@ import logging
 import random
 from functools import wraps
 
-# from mangum import Mangum
-from quart import Quart, render_template, render_template_string, websocket, send_from_directory
+#import pygame # this can log key_inputs easily
 
-base_dir = '../'
+# from mangum import Mangum
+from quart import Quart, make_response, render_template, render_template_string, websocket, send_from_directory
+#### Also: https://pgjones.gitlab.io/quart/how_to_guides/flask_extensions.html
+
+
 
 app = Quart(__name__, template_folder=base_dir, static_folder=base_dir)
 
+## test queue which will empty when you go to /latest (it empties each time)
+test_queue = asyncio.Queue() ## http://pymotw.com/2/Queue/
+
+## Each client gets a message queue
+connected_websockets = set()
+connected_sse_clients = set()
+## For non-client-dependent data it is more efficient to push to a single object that all clients can access
+
 # handler = Mangum(app)  # optionally set debug=True ### for serverless
 
-# In python command line:
-# python server.py
 
-#############################
-## Socket server functions ##
-#############################
-
-
-## Send message to all connections
-async def broadcast(message):
+## Send message to all websocket connections
+async def broadcast_ws(message):
     global connected_websockets 
     for queue in connected_websockets: ## add new message to each websocket queue (created in collect_websocket)
         await queue.put(message)
-##
 
-## transmitter loop, runs per-socket
-async def sending(queue):
-    while True:
-        data = await queue.get() ## get next data on queue (created in collect_websocket)
-        await websocket.send(data) ## send the queue data added on this socket
-        #await websocket.send_json(data)
+####
+
+## Send message to all event source clients
+async def broadcast_sse(message):
+    global connected_sse_clients 
+    for queue in connected_sse_clients: ## add new message to each websocket queue (created in collect_websocket)
+        await queue.put(message)
+    
+####
+
+## Broadcast on all channels
+async def broadcast(message):
+    await broadcast_sse(message)
+    await broadcast_ws(message)
+
+
+
+######################
+###### REST API ######
+######################
+
+## test route for receiving messages
+@app.route('/')
+async def index():
+    return await render_template('python/index.html')
+
+## Can serv the built app from quart too
+@app.route('/build')
+async def build():
+    return await render_template('src/index.html')
+
+# returns arbitrary files (e.g. the built app files)
+@app.route('/<path:path>')
+async def get_resource(path):  # pragma: no cover
+    return await app.send_static_file(path)
+
+# example to flush the main data queue to the server
+@app.route('/latest')
+async def dump_queue():
+    ## For example: create a list
+    templateString = "<ul>"
+    while(test_queue.empty() == False):
+        data = await test_queue.get()
+        templateString += "<li>"+str(data)+"</li>"
+    
+    templateString += "</ul>"
+
+    return await render_template_string(templateString)
+
+## Error handlers
+
+## page not found
+@app.errorhandler(404)
+async def pageNotFound(error):
+    return await render_template_string("<h3>404: resource not found</h3>")
+
+## resource not found
+@app.errorhandler(500)
+async def err500(error):
+    return await  render_template_string("<div>500</div>", e=error), 500 ## this isn't quite right
+
+
+
+################################
+## Websocket server functions ## https://pgjones.gitlab.io/quart/tutorials/websocket_tutorial.html
+################################
+
+## transmitter loop, runs per-socket whenever a message is queued for that socket
+async def ws_transmitter(websocket, queue):
+    try: 
+        if websocket and queue:
+            while True:
+                data = await queue.get() ## get next data on queue (created in collect_websocket)
+                await websocket.send(data) ## send the queue data added on this socket
+                #await websocket.send_json(data)
+    except asyncio.CancelledError:
+        return 0
 ##
 
 ## receiver loop, runs per-socket
-async def receiving(delay =2):
+async def ws_receiver(websocket):
     try:
-        while True:
-            data = await websocket.receive() # any websocket-received data will be broadcasted to all connections
-            broadcast(data) ## relay any received data back to all connections (test)
+        if websocket:
+            while True:
+                data = await websocket.receive() # any websocket-received data will be broadcasted to all connections
+                broadcast(data) ## relay any received data back to all connections (test)
     except asyncio.CancelledError:
         # Handle disconnection here
         await websocket.close(1000)
-        raise    
+        return 0  
 ##
 
-###################
-## Test task to emit random numbers to each connection instead of relaying messages
-async def test_transmitter(num):
-    while True:
-        await broadcast(num * random.random())
-        await asyncio.sleep(random.random())
-###################
-
 ### Set up an asyncio queue for each new socket connection for broadcasting data
-connected_websockets = set()
+
 
 def collect_websocket(func):
     @wraps(func)
@@ -90,8 +163,8 @@ def collect_websocket(func):
 async def ws(queue):
     print('Adding socket', websocket)
     await websocket.accept()
-    transmitter = asyncio.create_task(sending(queue)) ## transmitter task, process outgoing messages
-    receiver = asyncio.create_task(receiving(2))      ## receiver task, process incoming messages
+    transmitter = asyncio.create_task(ws_transmitter(websocket,queue)) ## transmitter task, process outgoing messages
+    receiver = asyncio.create_task(ws_receiver(websocket))      ## receiver task, process incoming messages
     await asyncio.gather(transmitter, receiver)
 
 # JavaScript:
@@ -102,34 +175,78 @@ async def ws(queue):
 # 
 # ws.send('bob');
 
-## test route for receiving messages
-@app.route('/')
-async def index():
-    return await render_template('python/index.html')
 
-## Can serv the built app from quart too
-@app.route('/build')
-async def build():
-    return await render_template('src/index.html')
 
-def root_dir():  # pragma: no cover
-    return os.path.abspath(os.path.dirname(__file__))
+########################
+## Server Sent Events ## https://pgjones.gitlab.io/quart/tutorials/broadcast_tutorial.html
+########################
+from typing import Optional
 
-@app.route('/<path:path>')
-async def get_resource(path):  # pragma: no cover
-    p = path.split('/')
-    l = len(p)
-    return await app.send_static_file(path)
+class ServerSentEvent:
 
-## page not found
-@app.errorhandler(404)
-async def pageNotFound(error):
-    return await render_template_string("<h3>404: resource not found</h3>")
+    def __init__(
+            self,
+            data: str,
+            *,
+            event: Optional[str]=None,
+            id: Optional[int]=None,
+            retry: Optional[int]=None,
+    ) -> None:
+        self.data = data
+        self.event = event
+        self.id = id
+        self.retry = retry
 
-## resource not found
-@app.errorhandler(500)
-async def handle_exception(error):
-    return await  render_template_string("<div>500</div>", e=error), 500 ## this isn't quite right
+    def encode(self) -> bytes:
+        message = f"data: {self.data}"
+        if self.event is not None:
+            message = f"{message}\nevent: {self.event}"
+        if self.id is not None:
+            message = f"{message}\nid: {self.id}"
+        if self.retry is not None:
+            message = f"{message}\nretry: {self.retry}"
+        message = message+"\r\n\r\n"
+        return message.encode('utf-8')
+
+## Outgoing-only data via event source (more efficient than WS).
+@app.route('/sse')
+async def sse():
+    sse_queue = asyncio.Queue()
+    connected_sse_clients.add(sse_queue)
+    async def send_events():
+        while True:
+            try:
+                data = await sse_queue.get()
+                event = ServerSentEvent(data)
+                encoded = event.encode()
+                yield encoded
+            except asyncio.CancelledError:
+                connected_sse_clients.remove(sse_queue)
+                
+
+    response = await make_response(
+        send_events(),
+        {
+            'Content-Type': 'text/event-stream',
+            'Cache-Control': 'no-cache',
+            'Transfer-Encoding': 'chunked',
+            'Access-Control-Allow-Origin': '*', # cross-port access
+        },    
+    )
+    response.timeout = None
+    return response
+
+# Javascript e.g.
+# var es = new EventSource('http://localhost/sse');
+# es.onmessage = function (event) {
+#     var messages_dom = document.getElementsByTagName('ul')[0];
+#     var message_dom = document.createElement('li');
+#     var content_dom = document.createTextNode(event.data);
+#     message_dom.appendChild(content_dom);
+#     messages_dom.appendChild(message_dom);
+# };
+
+
 
 #############
 ## Run sync for whatever reason in quart
@@ -145,22 +262,43 @@ async def handle_exception(error):
 #     return wrapper
 #############
 
+###################
+## Test task to emit random numbers to each connection instead of relaying messages. e.g. replace _thread with this in thread_event_loop
+async def test_transmitter(num):
+    while True:
+        result = str(num * random.random())
+        try:
+            await broadcast(result)
+        except asyncio.CancelledError:
+            break
+        await asyncio.sleep(random.random())
+    
+    
+###################
 
 
-#### thread setup
+##########################
+## Thread process setup ##
+##########################
 
-# Setup the socket server on the thread
-# Set up the send/receive loop
+## Use threads to run concurrent operations with the server for better performance
 
-        
+threads = set()
+
 ## on each loop run this function
 async def _thread_main(queue, ctr=0):
-    result = "Thread Running: " + str(ctr)
-    global connected_websockets 
-    for queue in connected_websockets: ## add new message to each websocket queue for broadcasting results to connections
-        await queue.put(result)
-    logging.info(result)
-    return ctr+1
+    
+    result = "Thread Running: " + str(ctr) ## e.g. some operation
+    
+    ### Example: Broadcast thread results to all connected clients
+    await broadcast(result)
+
+    ## Example: Pass results to the message queue for pulling results on any thread
+    await queue.put(result)
+    
+    logging.info(result) # log result
+    
+    return ctr+1 # for example
 
 
 ## thread loop routine
@@ -168,47 +306,94 @@ async def _thread(queue, delay=2):
     try:
         ctr = 0
         while True & threading.main_thread().is_alive(): ## This should quit if the main thread quits
-            ctr = await _thread_main(queue, ctr) ## Run the thread function
-            await asyncio.sleep(delay) ## releases the task on the event loop
-    except asyncio.CancelledError:
-        raise
+            ctr = await _thread_main(queue, ctr)         ## Run the thread operation
+            await asyncio.sleep(delay)                   ## Release the task on the thread event loop till next iteration
+    except (KeyboardInterrupt, asyncio.CancelledError):
+        SystemExit()
+
+
+# async def check_keyinput():
+#     while True:
+#         pressed = pygame.key.get_pressed()
+#         if pressed[pygame.K_c] and (pressed[pygame.K_LCTRL] or pressed[pygame.K_RCTRL]):
+#             sys.exit(1) 
+#         await asyncio.sleep(0.016666667)
 
 ## set up the thread asyncio event loop
 def thread_event_loop(queue, delay=2):
+
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
-    loop.run_until_complete(_thread(queue, delay))
-    loop.close()
+    loop.run_until_complete(_thread(queue,delay))
 
-
-
-main_queue = asyncio.Queue() ## http://pymotw.com/2/Queue/
+    #pygame.init() # can check simultaneous key inputs with pygame
+    #loop.run_until_complete(check_keyinput()) 
 
 
 def threadSetup():   
-    format = "%(asctime)s: %(message)s"
+
+    ## logging that works on threads
+    format = "%(asctime)s: %(message)s" 
     logging.basicConfig(format=format, level=logging.INFO,
                         datefmt="%H:%M:%S")
     logging.info("Thread being created")
 
-
-    x = threading.Thread(target=thread_event_loop, args=(main_queue,2,)) ## create the thread
-
+    ## Create a thread that runs an arbitrary process concurrently with the server
+    thread1 = threading.Thread(target=thread_event_loop, args=(test_queue,2,))
+    threads.add(thread1) ## create the thread
 
     logging.info("Thread starting")
-    #x.daemon = True
-    x.start()
+    #x.daemon = True    ## kills the thread if main thread crashes (debug only)
+    thread1.start()
     logging.info("Thread running")
     
 ######
 
+
+## Customizing the app sequencing
+## https://pgjones.gitlab.io/quart/how_to_guides/event_loop.html
+
+### APP STARTUP
+@app.before_serving
+async def startup():
+    loop = asyncio.get_event_loop() ##
+    ## loop.create_task(test_transmitter(10)) ## e.g. create a concurrent process on the main thread
+
+    threadSetup()  # set up background tasks (using threading, quart also has a background_task interface)
+
+    ## app.smtp_server = loop.create_server(aiosmtpd.smtp.SMTP, port=1025) ### e.g. server objects can run on the event loop
+   
+    logging.info("Quart server starting up!")
+
+@app.after_serving
+async def shutdown():
+    logging.info("Quart server shutting down!")
+
+    for thread in threads:
+        if thread.is_alive():
+            thread.join()
+
+
 ## MAIN, THIS IS WHAT RUNS
 if __name__ == "__main__":
+    try:
+        app.run(host=host, port=port) # run the quart server
+    except:
+        logging.info("Ended")
 
-    threadSetup()  # set up background tasks
-
-    app.run(host=host, port=port) # run the quart server
-
+    sys.exit(1)
 ####
+
+
+
+## For a production serve, Quart recommends hypercorn
+# from hypercorn.asyncio import serve
+# from hypercorn.config import Config
+# 
+# if __name__ == "__main__":
+#     loop = asyncio.get_event_loop()
+#     third_party = ThirdParty(loop)
+#     loop.run_until_complete(serve(app, Config()))
+#
 
 

@@ -15,16 +15,22 @@
         let host = 'localhost';
         let port = 7000;
 
-        let ws = new WebSocket('ws://' + host + ':' + port + '/'); //var ws = new WebSocket('ws://' + document.domain + ':' + location.port + '/');
+        let ws = new WebSocket(`ws://${host}:${port}/`); //var ws = new WebSocket('ws://' + document.domain + ':' + location.port + '/');
         ws.onmessage = function (event) {
-            const messagesDOM = document.getElementsByTagName('ul')[0];
-            const messageDOM = document.createElement('li');
-            //const message = JSON.parse(event.data).message;
-            const message = event.data;
-            const contentDOM = document.createTextNode(message);
-            messageDOM.appendChild(contentDOM);
-            messagesDOM.appendChild(messageDOM);
+          const messagesDOM = document.getElementsByTagName('ul')[0];
+          const messageDOM = document.createElement('li');
+          //const message = JSON.parse(event.data).message;
+          const message = event.data;
+          const contentDOM = document.createTextNode(message);
+          messageDOM.appendChild(contentDOM);
+          messagesDOM.appendChild(messageDOM);
         };
+
+        let es = new EventSource(`http://${host}:${port}/sse`);
+        es.onmessage = function (event) {
+            console.log('Event Source:',event.data);
+        };
+        
     </script>
   </body>
 </html>
