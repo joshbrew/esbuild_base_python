@@ -12,7 +12,7 @@ After installing dependencies,
 
 ## Run Python and Node together: 
 
-`npm run concurrent`. 
+`npm run concurrent`
 
 ## Otherwise
 
