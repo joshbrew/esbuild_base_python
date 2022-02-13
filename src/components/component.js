@@ -13,8 +13,8 @@ export class Custom extends DOMElement {
 
     //DOMElement custom callbacks:
     oncreate=(props)=>{
-        let host = 'localhost';
-        let port = 7000;
+        //let host = 'localhost';
+        //let port = 7000;
 
         props.ws = new WebSocket('ws://' + props.host + ':' + props.port + '/'); //var ws = new WebSocket('ws://' + document.domain + ':' + location.port + '/');
         props.ws.onmessage = (event) => {

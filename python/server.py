@@ -12,8 +12,8 @@ import sys
 import os
 import asyncio
 import threading
-import time
 import logging
+import random
 from functools import wraps
 
 # from mangum import Mangum
@@ -28,17 +28,48 @@ app = Quart(__name__, template_folder=base_dir, static_folder=base_dir)
 # In python command line:
 # python server.py
 
+#############################
+## Socket server functions ##
+#############################
 
-## Socket server functions
 
+## Send message to all connections
+async def broadcast(message):
+    global connected_websockets 
+    for queue in connected_websockets: ## add new message to each websocket queue (created in collect_websocket)
+        await queue.put(message)
+##
 
-############# 
-## Wrapper 
+## transmitter loop, runs per-socket
+async def sending(queue):
+    while True:
+        data = await queue.get() ## get next data on queue (created in collect_websocket)
+        await websocket.send(data) ## send the queue data added on this socket
+        #await websocket.send_json(data)
+##
 
-### Sets up an asyncio queue which can broadcast received data to all connections
+## receiver loop, runs per-socket
+async def receiving(delay =2):
+    try:
+        while True:
+            data = await websocket.receive() # any websocket-received data will be broadcasted to all connections
+            broadcast(data) ## relay any received data back to all connections (test)
+    except asyncio.CancelledError:
+        # Handle disconnection here
+        await websocket.close(1000)
+        raise    
+##
+
+###################
+## Test task to emit random numbers to each connection instead of relaying messages
+async def test_transmitter(num):
+    while True:
+        await broadcast(num * random.random())
+        await asyncio.sleep(random.random())
+###################
+
+### Set up an asyncio queue for each new socket connection for broadcasting data
 connected_websockets = set()
-
-main_queue = asyncio.Queue() ## http://pymotw.com/2/Queue/
 
 def collect_websocket(func):
     @wraps(func)
@@ -53,51 +84,9 @@ def collect_websocket(func):
     return wrapper
 ##############
 
-async def broadcast(message):
-    global connected_websockets 
-    for queue in connected_websockets: ## add new message to each websocket queue
-        await queue.put(message)
-##
-
-## transmitter loop, runs per-socket
-async def sending(queue):
-    while True:
-        data = await queue.get() ## get next data on queue
-        await websocket.send(data) ## send the queue data added on this socket
-        #await websocket.send_json(data)
-##
-
-## receiver loop, runs per-socket
-async def receiving(delay =2):
-    try:
-        while True:
-            data = await websocket.receive()
-            broadcast(data) ## relay any received data back to all connections (test)
-    except asyncio.CancelledError:
-        # Handle disconnection here
-        await websocket.close(1000)
-        raise    
-##
-
-    
-async def queue_from_thread():
-    try:
-        await put_queue()
-    except asyncio.CancelledError:
-        raise
-
-###################
-## Test task to emit random numbers instead of relaying messages
-async def test_transmitter(num):
-    while True:
-        await broadcast(num + random.random())
-        await asyncio.sleep(random.random())
-###################
-
-
-## websocket setup. For each websocket created, this coroutine is added
+## websocket setup. For each websocket created, these coroutines are added
 @app.websocket('/')
-@collect_websocket
+@collect_websocket ## Wrapper passes the new socket's queue in
 async def ws(queue):
     print('Adding socket', websocket)
     await websocket.accept()
@@ -165,10 +154,10 @@ async def handle_exception(error):
 
         
 ## on each loop run this function
-async def test_thread(queue, ctr=0):
+async def _thread_main(queue, ctr=0):
     result = "Thread Running: " + str(ctr)
     global connected_websockets 
-    for queue in connected_websockets: ## add new message to each websocket queue   
+    for queue in connected_websockets: ## add new message to each websocket queue for broadcasting results to connections
         await queue.put(result)
     logging.info(result)
     return ctr+1
@@ -178,36 +167,42 @@ async def test_thread(queue, ctr=0):
 async def _thread(queue, delay=2):
     try:
         ctr = 0
-        while True & threading.main_thread().is_alive():
-            ctr = await test_thread(queue, ctr)
-            time.sleep(delay)
+        while True & threading.main_thread().is_alive(): ## This should quit if the main thread quits
+            ctr = await _thread_main(queue, ctr) ## Run the thread function
+            await asyncio.sleep(delay) ## releases the task on the event loop
     except asyncio.CancelledError:
         raise
 
 ## set up the thread asyncio event loop
-def thread_loop(queue, delay=2):
+def thread_event_loop(queue, delay=2):
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     loop.run_until_complete(_thread(queue, delay))
     loop.close()
 
 
+
+main_queue = asyncio.Queue() ## http://pymotw.com/2/Queue/
+
+
 def threadSetup():   
     format = "%(asctime)s: %(message)s"
     logging.basicConfig(format=format, level=logging.INFO,
                         datefmt="%H:%M:%S")
-
     logging.info("Thread being created")
-    x = threading.Thread(target=thread_loop, args=(main_queue,2,))
+
+
+    x = threading.Thread(target=thread_event_loop, args=(main_queue,2,)) ## create the thread
+
+
     logging.info("Thread starting")
     #x.daemon = True
-
     x.start()
     logging.info("Thread running")
     
+######
 
-
-
+## MAIN, THIS IS WHAT RUNS
 if __name__ == "__main__":
 
     threadSetup()  # set up background tasks

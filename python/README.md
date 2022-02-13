@@ -9,11 +9,12 @@ Make sure you have these pip packages (`pip install x` if not found):
 from quart import Quart, render_template, websocket #pip install
 
 # these should be default
-import logging 
-import asyncio 
 import sys
-import threading 
-import time
+import os
+import asyncio
+import threading
+import logging
+import random
 from functools import wraps
 ```
 
