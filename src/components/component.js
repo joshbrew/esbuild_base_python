@@ -17,8 +17,8 @@ export class Custom extends DOMElement {
         let port = 7000;
 
         props.ws = new WebSocket('ws://' + props.host + ':' + props.port + '/'); //var ws = new WebSocket('ws://' + document.domain + ':' + location.port + '/');
-        props.ws.onmessage = function (event) {
-            const messagesDOM = document.getElementsByTagName('ul')[0];
+        props.ws.onmessage = (event) => {
+            const messagesDOM = this.getElementsByTagName('ul')[0];
             const messageDOM = document.createElement('li');
             //const message = JSON.parse(event.data).message;
             const message = event.data;
