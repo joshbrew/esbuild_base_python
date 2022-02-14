@@ -1,6 +1,6 @@
 
 import {DOMElement, addCustomElement} from 'fragelement';
-import {settings} from '../../node_server/server_settings'
+//import {settings} from '../../node_server/server_settings'
 
 let component = require('./component.html');
 

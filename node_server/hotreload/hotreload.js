@@ -8,6 +8,7 @@ const hotreload = new WebSocket.Server({
     port: cfg.settings.hotreload
 });
 
+//https://www.bscotch.net/post/create-a-live-reload-server
 const addhotreload = (content) => {
   return `${content.toString()}\n\n<script>(`+hotreloadclient.toString()+`)('${socketUrl}')</script>`;
 }

@@ -221,14 +221,16 @@ async def sse():
             except asyncio.CancelledError:
                 connected_sse_clients.remove(sse_queue)
 
-    response = await make_response(
-        send_events(),
-        {
+    headers = {
             'Content-Type': 'text/event-stream',
             'Cache-Control': 'no-cache',
             'Transfer-Encoding': 'chunked',
             'Access-Control-Allow-Origin': '*', # cross-port access
-        },    
+        }
+
+    response = await make_response(
+        send_events(),
+        headers,    
     )
     response.timeout = None
     return response
@@ -236,11 +238,7 @@ async def sse():
 # Javascript e.g.
 # var es = new EventSource('http://localhost/sse');
 # es.onmessage = function (event) {
-#     var messages_dom = document.getElementsByTagName('ul')[0];
-#     var message_dom = document.createElement('li');
-#     var content_dom = document.createTextNode(event.data);
-#     message_dom.appendChild(content_dom);
-#     messages_dom.appendChild(message_dom);
+#     console.log(event.data)
 # };
 
 
