@@ -2,21 +2,10 @@
 
 [Python](https://www.python.org/downloads/)
 
-Make sure you have these pip packages (`pip install x` if not found):
+Make sure you have quart (`pip install quart`)
 
-```py
-# from mangum import Mangum ## e.g. serverless
-from quart import Quart, render_template, websocket #pip install
+And for the python client test `pip install websockets`
 
-# these should be default
-import sys
-import os
-import asyncio
-import threading
-import logging
-import random
-from functools import wraps
-```
 
 Then run: 
 `python server.py`
