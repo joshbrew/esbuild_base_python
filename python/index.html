@@ -25,11 +25,6 @@
           messageDOM.appendChild(contentDOM);
           messagesDOM.appendChild(messageDOM);
         };
-
-        let es = new EventSource(`http://${host}:${port}/sse`);
-        es.onmessage = function (event) {
-            console.log('Event Source:',event.data);
-        };
         
     </script>
   </body>

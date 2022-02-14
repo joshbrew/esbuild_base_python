@@ -20,6 +20,7 @@ import asyncio
 import threading
 import logging
 import random
+import signal
 from functools import wraps
 
 #import pygame # this can log key_inputs easily
@@ -27,8 +28,6 @@ from functools import wraps
 # from mangum import Mangum
 from quart import Quart, make_response, render_template, render_template_string, websocket, send_from_directory
 #### Also: https://pgjones.gitlab.io/quart/how_to_guides/flask_extensions.html
-
-
 
 app = Quart(__name__, template_folder=base_dir, static_folder=base_dir)
 
@@ -125,7 +124,7 @@ async def ws_transmitter(websocket, queue):
                 await websocket.send(data) ## send the queue data added on this socket
                 #await websocket.send_json(data)
     except asyncio.CancelledError:
-        return 0
+        raise 
 ##
 
 ## receiver loop, runs per-socket
@@ -138,7 +137,6 @@ async def ws_receiver(websocket):
     except asyncio.CancelledError:
         # Handle disconnection here
         await websocket.close(1000)
-        return 0  
 ##
 
 ### Set up an asyncio queue for each new socket connection for broadcasting data
@@ -222,7 +220,6 @@ async def sse():
                 yield encoded
             except asyncio.CancelledError:
                 connected_sse_clients.remove(sse_queue)
-                
 
     response = await make_response(
         send_events(),
@@ -284,6 +281,7 @@ async def test_transmitter(num):
 ## Use threads to run concurrent operations with the server for better performance
 
 threads = set()
+exit_event = threading.Event()
 
 ## on each loop run this function
 async def _thread_main(queue, ctr=0):
@@ -306,6 +304,8 @@ async def _thread(queue, delay=2):
     try:
         ctr = 0
         while True & threading.main_thread().is_alive(): ## This should quit if the main thread quits
+            if exit_event.is_set():
+                break
             ctr = await _thread_main(queue, ctr)         ## Run the thread operation
             await asyncio.sleep(delay)                   ## Release the task on the thread event loop till next iteration
     except (KeyboardInterrupt, asyncio.CancelledError):
@@ -343,12 +343,17 @@ def threadSetup():
     threads.add(thread1) ## create the thread
 
     logging.info("Thread starting")
-    #x.daemon = True    ## kills the thread if main thread crashes (debug only)
     thread1.start()
     logging.info("Thread running")
     
 ######
 
+def signal_handler(signum, frame):
+    exit_event.set()
+    sys.exit(0)
+
+signal.signal(signal.SIGTERM, signal_handler)
+signal.signal(signal.SIGINT, signal_handler)
 
 ## Customizing the app sequencing
 ## https://pgjones.gitlab.io/quart/how_to_guides/event_loop.html
@@ -367,21 +372,20 @@ async def startup():
 
 @app.after_serving
 async def shutdown():
-    logging.info("Quart server shutting down!")
-
     for thread in threads:
-        if thread.is_alive():
+        if(thread.is_alive()):
             thread.join()
 
+    logging.info("Quart server shutting down!")
 
 ## MAIN, THIS IS WHAT RUNS
 if __name__ == "__main__":
     try:
         app.run(host=host, port=port) # run the quart server
-    except:
+    except asyncio.CancelledError:
         logging.info("Ended")
-
-    sys.exit(1)
+ 
+    sys.exit(0)
 ####
 
 
