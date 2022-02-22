@@ -21,7 +21,7 @@
   "license": "AGPL-3.0-or-later",
   "dependencies": {
     "esbuild": "^0.14.21",
-    "fragelement": "^1.1.9"
+    "fragelement": "^1.3.2"
   },
   "devDependencies": {
     "nodemon": "^2.0.15",
