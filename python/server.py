@@ -7,10 +7,17 @@
 # python server.py
 
 
-## Settings
-host = 'localhost'
+## 
+production = False ### For serving HTTPS, use False for HTTP and hot reloading quart (only if this file changes)
+host = 'localhost' ## e.g. mywebsite.com
 port = 7000
 base_dir = '../' ## Example serves both templates and static files from the base dir
+
+config = {
+    'keyfile':'node_server/ssl/key.pem',
+    'certfile':'node_server/ssl/cert.pem',
+    'bind':host+':'+str(port)
+}
 
 ## app available at http://localhost/7000
  
@@ -29,6 +36,11 @@ from functools import wraps
 from quart import Quart, make_response, render_template, render_template_string, websocket, send_from_directory
 #### Also: https://pgjones.gitlab.io/quart/how_to_guides/flask_extensions.html
 
+## For a production serve, Quart recommends hypercorn
+from hypercorn.asyncio import serve
+from hypercorn.config import Config
+
+
 app = Quart(__name__, template_folder=base_dir, static_folder=base_dir)
 
 ## test queue which will empty when you go to /latest (it empties each time)
@@ -37,9 +49,15 @@ test_queue = asyncio.Queue() ## http://pymotw.com/2/Queue/
 ## Each client gets a message queue
 connected_websockets = set()
 connected_sse_clients = set()
+admin_addr = ''
 ## For non-client-dependent data it is more efficient to push to a single object that all clients can access
 
 # handler = Mangum(app)  # optionally set debug=True ### for serverless
+
+
+
+threads = set()
+exit_event = threading.Event()
 
 
 ## Send message to all websocket connections
@@ -125,6 +143,8 @@ async def ws_transmitter(websocket, queue):
                 #await websocket.send_json(data)
     except asyncio.CancelledError:
         raise 
+    except KeyboardInterrupt:
+        raise
 ##
 
 ## receiver loop, runs per-socket
@@ -133,10 +153,19 @@ async def ws_receiver(websocket):
         if websocket:
             while True:
                 data = await websocket.receive() # any websocket-received data will be broadcasted to all connections
-                broadcast(data) ## relay any received data back to all connections (test)
+                if data == 'nodejs': 
+                    admin_addr = str(websocket.remote_addr)
+                    logging.info("Pong: Quart server client connected - " + str(data))
+                if data == 'kill':
+                    if str(websocket.remote_addr) == admin_addr:
+                        logging.info('kill command received')
+                        raise KeyboardInterrupt
+                await broadcast(data) ## relay any received data back to all connections (test)
     except asyncio.CancelledError:
         # Handle disconnection here
         await websocket.close(1000)
+    except KeyboardInterrupt:
+        raise
 ##
 
 ### Set up an asyncio queue for each new socket connection for broadcasting data
@@ -159,7 +188,7 @@ def collect_websocket(func):
 @app.websocket('/')
 @collect_websocket ## Wrapper passes the new socket's queue in
 async def ws(queue):
-    print('Adding socket', websocket)
+    if production == False: logging.info('Quart:: socket request from IP: ' + str(websocket.remote_addr))
     await websocket.accept()
     transmitter = asyncio.create_task(ws_transmitter(websocket,queue)) ## transmitter task, process outgoing messages
     receiver = asyncio.create_task(ws_receiver(websocket))      ## receiver task, process incoming messages
@@ -220,6 +249,8 @@ async def sse():
                 yield encoded
             except asyncio.CancelledError:
                 connected_sse_clients.remove(sse_queue)
+            except KeyboardInterrupt:
+                raise
 
     headers = {
             'Content-Type': 'text/event-stream',
@@ -264,8 +295,8 @@ async def test_transmitter(num):
         result = str(num * random.random())
         try:
             await broadcast(result)
-        except asyncio.CancelledError:
-            break
+        except (KeyboardInterrupt, asyncio.CancelledError):       
+            raise
         await asyncio.sleep(random.random())
     
     
@@ -278,13 +309,11 @@ async def test_transmitter(num):
 
 ## Use threads to run concurrent operations with the server for better performance
 
-threads = set()
-exit_event = threading.Event()
 
 ## on each loop run this function
 async def _thread_main(queue, ctr=0):
     
-    result = "Thread Running: " + str(ctr) ## e.g. some operation
+    result = "Python thread loops: " + str(ctr) ## e.g. some operation
     
     ### Example: Broadcast thread results to all connected clients
     await broadcast(result)
@@ -292,7 +321,7 @@ async def _thread_main(queue, ctr=0):
     ## Example: Pass results to the message queue for pulling results on any thread
     await queue.put(result)
     
-    logging.info(result) # log result
+    if production == False: logging.info(result) # log result
     
     return ctr+1 # for example
 
@@ -308,6 +337,7 @@ async def _thread(queue, delay=2):
             await asyncio.sleep(delay)                   ## Release the task on the thread event loop till next iteration
     except (KeyboardInterrupt, asyncio.CancelledError):
         SystemExit()
+        raise
 
 
 # async def check_keyinput():
@@ -338,6 +368,7 @@ def threadSetup():
 
     ## Create a thread that runs an arbitrary process concurrently with the server
     thread1 = threading.Thread(target=thread_event_loop, args=(test_queue,2,))
+    thread1.daemon = True ## should kill the process
     threads.add(thread1) ## create the thread
 
     logging.info("Thread starting")
@@ -349,6 +380,7 @@ def threadSetup():
 def signal_handler(signum, frame):
     exit_event.set()
     sys.exit(0)
+    raise KeyboardInterrupt
 
 signal.signal(signal.SIGTERM, signal_handler)
 signal.signal(signal.SIGINT, signal_handler)
@@ -370,32 +402,34 @@ async def startup():
 
 @app.after_serving
 async def shutdown():
-    for thread in threads:
-        if(thread.is_alive()):
-            thread.join()
-
     logging.info("Quart server shutting down!")
-
-## MAIN, THIS IS WHAT RUNS
-if __name__ == "__main__":
-    try:
-        app.run(host=host, port=port) # run the quart server
-    except asyncio.CancelledError:
-        logging.info("Ended")
- 
-    sys.exit(0)
-####
+    exit_event.set()
+    raise KeyboardInterrupt
 
 
 
-## For a production serve, Quart recommends hypercorn
-# from hypercorn.asyncio import serve
-# from hypercorn.config import Config
-# 
-# if __name__ == "__main__":
-#     loop = asyncio.get_event_loop()
-#     third_party = ThirdParty(loop)
-#     loop.run_until_complete(serve(app, Config()))
-#
+
+if production == True:
+
+    if __name__ == "__main__":
+        try:
+            asyncio.run(serve(app, Config.from_mapping(config)))
+            #asyncio.run(serve(app, Config.from_mapping(config)))
+        except (KeyboardInterrupt, asyncio.CancelledError):
+            logging.info("Ended")
+
+        sys.exit(0)
+    
+else: 
+    if __name__ == "__main__":       
+        ## FOR DEBUGGING WITH HTTP AND LIVE RELOAD
+        ## MAIN, THIS IS WHAT RUNS
+        try:
+            app.run(host=host, port=port) # run the quart server
+        except asyncio.CancelledError:
+            logging.info("Ended")
+    
+        sys.exit(0)
+    ####
 
 

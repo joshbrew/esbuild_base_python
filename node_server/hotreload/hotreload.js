@@ -8,7 +8,6 @@ const hotreload = new WebSocket.Server({
     port: cfg.settings.hotreload
 });
 
-//https://www.bscotch.net/post/create-a-live-reload-server
 const addhotreload = (content) => {
   return `${content.toString()}\n\n<script>(`+hotreloadclient.toString()+`)('${socketUrl}')</script>`;
 }
@@ -34,6 +33,10 @@ const hotreloadclient = (socketUrl) => {
         if(attempts > maxAttempts){
           console.error("Could not reconnect to dev server.");
           return;
+        }
+        socket = new WebSocket(socketUrl);
+        socket.onerror = (er) => {
+          console.error(`Hot reload port disconnected, will reload on reconnected. Attempt ${attempts} of ${maxAttempts}`);
         }
         socket.addEventListener('error',()=>{
           setTimeout(reloadIfCanConnect,interAttemptTimeoutMilliseconds);
