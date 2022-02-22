@@ -89,8 +89,11 @@ function onUpgrade(request, socket, head) { //https://github.com/websockets/ws
         py_wss.handleUpgrade(request, socket, head, (ws) => {
             py_wss.emit('connection', ws, request);
         });
-    } else {
-    }
+    } else if(request.url === '/hotreload') {
+        hotreload.hotreload.handleUpgrade(request, socket, head, (ws) => {
+            hotreload.hotreload.emit('connection', ws, request);
+        }); 
+    } 
 }
 
 
@@ -101,8 +104,6 @@ function onStarted() {
         ${cfg.settings.protocol}://${cfg.settings.host}:${cfg.settings.port}/`
     );
 }
-
-
 
 //now create the http/https server. For hosted servers, use the IP and open ports. Default html port is 80 or sometimes 443
 if(cfg.settings.protocol === 'http') {

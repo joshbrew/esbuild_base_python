@@ -6,7 +6,7 @@ let component = require('./sse.component.html');
 
 //See: https://github.com/brainsatplay/domelement
 export class SSE extends DOMElement {
-    props={host:settings.host, port:settings.quart, es:undefined} //can specify properties of the element which can be subscribed to for changes.
+    props={host:settings.host, port:settings.python, es:undefined} //can specify properties of the element which can be subscribed to for changes.
     
     //set the template string or function (which can input props to return a modified string)
     template=component;

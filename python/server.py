@@ -12,6 +12,7 @@ production = False ### For serving HTTPS, use False for HTTP and hot reloading q
 host = 'localhost' ## e.g. mywebsite.com
 port = 7000
 base_dir = '../' ## Example serves both templates and static files from the base dir
+debug = False
 
 config = {
     'keyfile':'node_server/ssl/key.pem',
@@ -188,7 +189,7 @@ def collect_websocket(func):
 @app.websocket('/')
 @collect_websocket ## Wrapper passes the new socket's queue in
 async def ws(queue):
-    if production == False: logging.info('Quart:: socket request from IP: ' + str(websocket.remote_addr))
+    if debug == True: logging.info('Quart:: socket request from IP: ' + str(websocket.remote_addr))
     await websocket.accept()
     transmitter = asyncio.create_task(ws_transmitter(websocket,queue)) ## transmitter task, process outgoing messages
     receiver = asyncio.create_task(ws_receiver(websocket))      ## receiver task, process incoming messages
@@ -321,7 +322,7 @@ async def _thread_main(queue, ctr=0):
     ## Example: Pass results to the message queue for pulling results on any thread
     await queue.put(result)
     
-    if production == False: logging.info(result) # log result
+    if debug == True: logging.info(result) # log result
     
     return ctr+1 # for example
 

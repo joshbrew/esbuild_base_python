@@ -6,7 +6,7 @@ let component = require('./socket.component.html');
 
 //See: https://github.com/brainsatplay/domelement
 export class Socket extends DOMElement {
-    props={host:settings.host, port:settings.quart, ws:undefined} //can specify properties of the element which can be subscribed to for changes.
+    props={host:settings.host, port:settings.python, ws:undefined} //can specify properties of the element which can be subscribed to for changes.
     
     //set the template string or function (which can input props to return a modified string)
     template=component;
