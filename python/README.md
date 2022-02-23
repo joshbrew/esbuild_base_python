@@ -4,7 +4,6 @@
 
 Make sure you have quart (`pip install quart`)
 
-And for the python client test `pip install websockets`
 
 
 Then run: 
